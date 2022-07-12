@@ -12,3 +12,7 @@ file_types:
     display_name: Ruby templates
     extensions:
        - .erb
+options:
+  diff_descriptor:
+    title: The path to the diff descriptor file.
+    type: string

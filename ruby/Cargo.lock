@@ -355,6 +355,8 @@ dependencies = [
  "num_cpus",
  "rayon",
  "regex",
+ "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",

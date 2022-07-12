@@ -1,11 +1,12 @@
 use node_types::{EntryKind, Field, NodeTypeMap, Storage, TypeName};
+use serde_json::Value as JsonValue;
 use std::borrow::Cow;
 use std::collections::BTreeMap as Map;
 use std::collections::BTreeSet as Set;
+use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
 use std::path::Path;
-
 use tracing::{error, info, span, Level};
 use tree_sitter::{Language, Node, Parser, Range, Tree};
 
@@ -53,6 +54,10 @@ impl TrapWriter {
         self.trap_output
             .push(TrapEntry::MapLabelToKey(label, key.to_owned()));
         (label, true)
+    }
+
+    fn bump_id(&mut self) {
+        self.trap_output.push(TrapEntry::BumpId())
     }
 
     fn add_tuple(&mut self, table_name: &str, args: Vec<Arg>) {
@@ -158,44 +163,52 @@ impl TrapWriter {
     }
 }
 
+pub fn extract_none(trap_writer: &mut TrapWriter) {
+    trap_writer.bump_id();
+}
+
 /// Extracts the source file at `path`, which is assumed to be canonicalized.
 pub fn extract(
     language: Language,
     language_prefix: &str,
     schema: &NodeTypeMap,
     trap_writer: &mut TrapWriter,
-    path: &Path,
+    full_path: &Path,
     source: &[u8],
     ranges: &[Range],
+    diff_descriptor: &Option<JsonValue>,
 ) -> std::io::Result<()> {
     let span = span!(
         Level::TRACE,
         "extract",
-        file = %path.display()
+        file = %full_path.display()
     );
 
     let _enter = span.enter();
 
-    info!("extracting: {}", path.display());
+    info!("extracting: {}", full_path.display());
 
     let mut parser = Parser::new();
     parser.set_language(language).unwrap();
     parser.set_included_ranges(ranges).unwrap();
     let tree = parser.parse(&source, None).expect("Failed to parse file");
-    trap_writer.comment(format!("Auto-generated TRAP file for {}", path.display()));
-    let file_label = &trap_writer.populate_file(path);
+    trap_writer.comment(format!(
+        "Auto-generated TRAP file for {}",
+        full_path.display()
+    ));
+    let file_label = &trap_writer.populate_file(full_path);
     let mut visitor = Visitor {
         source,
         trap_writer,
         // TODO: should we handle path strings that are not valid UTF8 better?
-        path: format!("{}", path.display()),
+        path: format!("{}", full_path.display()),
         file_label: *file_label,
         toplevel_child_counter: 0,
         stack: Vec::new(),
         language_prefix,
         schema,
     };
-    traverse(&tree, &mut visitor);
+    traverse(&tree, &mut visitor, diff_descriptor);
 
     parser.reset();
     Ok(())
@@ -368,7 +381,13 @@ impl Visitor<'_> {
         true
     }
 
-    fn leave_node(&mut self, field_name: Option<&'static str>, node: Node) {
+    fn leave_node(
+        &mut self,
+        field_name: Option<&'static str>,
+        node: Node,
+        node_path: String,
+        diff_descriptor: &Option<JsonValue>,
+    ) {
         if node.is_error() || node.is_missing() {
             return;
         }
@@ -464,6 +483,29 @@ impl Visitor<'_> {
                     },
                 });
             };
+        }
+
+        // emit bump_id directive if necessary
+        if diff_descriptor.is_some() {
+            let should_bump = match &diff_descriptor.as_ref().unwrap()[&self.path] {
+                serde_json::Value::Object(value_map) => match &value_map["paths"] {
+                    serde_json::Value::Array(node_paths) => {
+                        let mut result = false;
+                        for p in node_paths {
+                            if node_path.eq(p.as_str().unwrap()) {
+                                // println!("Hit {} {} {}", node_path, p, rel_path);
+                                result = true;
+                            }
+                        }
+                        result
+                    }
+                    _ => false,
+                },
+                _ => false,
+            };
+            if should_bump {
+                self.trap_writer.bump_id();
+            }
         }
     }
 
@@ -678,17 +720,55 @@ fn location_for(source: &[u8], n: Node) -> (usize, usize, usize, usize) {
     (start_line, start_col, end_line, end_col)
 }
 
-fn traverse(tree: &Tree, visitor: &mut Visitor) {
+fn traverse(
+    tree: &Tree,
+    visitor: &mut Visitor,
+    diff_descriptor: &Option<JsonValue>,
+) {
+    let mut paths: HashMap<usize, String> = HashMap::new();
+    let mut child_indices: HashMap<usize, u64> = HashMap::new();
+
     let cursor = &mut tree.walk();
+    paths.insert(cursor.node().id(), "0".to_string());
+    child_indices.insert(cursor.node().id(), 0);
     visitor.enter_node(cursor.node());
+
     let mut recurse = true;
     loop {
         if recurse && cursor.goto_first_child() {
+            let parent_id = cursor.node().parent().unwrap().id();
+            let parent_path = paths.get(&parent_id).unwrap();
+
+            let current_id = cursor.node().id();
+            let current_child_index = child_indices.get(&parent_id).unwrap().clone();
+            let current_path = format!("{}_{}", parent_path, current_child_index);
+
+            child_indices.insert(parent_id, current_child_index + 1);
+            child_indices.insert(current_id, 0);
+            paths.insert(current_id, current_path.clone());
+
             recurse = visitor.enter_node(cursor.node());
         } else {
-            visitor.leave_node(cursor.field_name(), cursor.node());
+            let path = paths.get(&cursor.node().id()).unwrap().to_string();
+            visitor.leave_node(
+                cursor.field_name(),
+                cursor.node(),
+                path,
+                diff_descriptor,
+            );
 
             if cursor.goto_next_sibling() {
+                let parent_id = cursor.node().parent().unwrap().id();
+                let parent_path = paths.get(&parent_id).unwrap();
+
+                let current_id = cursor.node().id();
+                let current_child_index = child_indices.get(&parent_id).unwrap().clone();
+                let current_path = format!("{}_{}", parent_path, current_child_index);
+
+                child_indices.insert(parent_id, current_child_index + 1);
+                child_indices.insert(current_id, 0);
+                paths.insert(current_id, current_path.clone());
+
                 recurse = visitor.enter_node(cursor.node());
             } else if cursor.goto_parent() {
                 recurse = false;
@@ -718,6 +798,7 @@ enum TrapEntry {
     MapLabelToKey(Label, String),
     /// foo_bar(arg*)
     GenericTuple(String, Vec<Arg>),
+    BumpId(),
     Comment(String),
 }
 impl fmt::Display for TrapEntry {
@@ -738,6 +819,7 @@ impl fmt::Display for TrapEntry {
                 write!(f, ")")
             }
             TrapEntry::Comment(line) => write!(f, "// {}", line),
+            TrapEntry::BumpId() => write!(f, "bump_id"),
         }
     }
 }
