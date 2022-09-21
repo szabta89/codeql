@@ -281,10 +281,11 @@ module Trees {
         mid = this.getAnEnsureDescendant() and
         result = mid.getAChild() and
         getCfgScope(result) = getCfgScope(mid) and
-        not exists(BodyStmt nestedBlock |
-          result = nestedBlock.getEnsure() and
-          nestedBlock != this
-        )
+        //not exists(BodyStmt nestedBlock |
+        //  result = nestedBlock.getEnsure() and
+        //  nestedBlock != this
+        //)
+        not result = mid.(BodyStmt).getEnsure()
       )
     }
 
@@ -329,10 +330,14 @@ module Trees {
         last(this.getBodyChild(_, rescuable), last, c) and
         not c instanceof NormalCompletion
         or
-        exists(int lst |
-          last(this.getBodyChild(lst, rescuable), last, c) and
-          not exists(this.getBodyChild(lst + 1, _))
-        )
+        last(this.getLastBodyChildHelper(rescuable), last, c)
+      )
+    }
+
+    private AstNode getLastBodyChildHelper(boolean rescuable) {
+      exists(int lst |
+        result = this.getBodyChild(lst, rescuable) and
+        not exists(this.getBodyChild(lst + 1, _))
       )
     }
   }

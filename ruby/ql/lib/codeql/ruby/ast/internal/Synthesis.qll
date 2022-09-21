@@ -1053,7 +1053,8 @@ private module ImplicitHashValueSynthesis {
       setter = false and
       arity = 0 and
       name = keyName(keyWithoutValue(_, _)) and
-      not name.charAt(0).isUppercase()
+ 	      //not name.charAt(0).isUppercase()
+           	name.regexpMatch("[^A-Z].*")
     }
 
     final override predicate constantReadAccess(string name) {

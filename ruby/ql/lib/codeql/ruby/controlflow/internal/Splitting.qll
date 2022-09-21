@@ -326,7 +326,7 @@ module EnsureSplitting {
     override predicate hasSuccessor(AstNode pred, AstNode succ, Completion c) {
       this.appliesToPredecessor(pred) and
       succ(pred, succ, c) and
-      succ =
+      /*succ =
         any(EnsureNode en |
           if en.isEntryNode() and en.getBlock() != pred.(EnsureNode).getBlock()
           then
@@ -335,6 +335,21 @@ module EnsureSplitting {
           else
             // staying in the same (possibly nested) `ensure` block as `pred`
             en.getNestLevel() >= this.getNestLevel()
+        )
+      */
+      succ =
+        any(EnsureNode en |
+          (en.isEntryNode() and en.getBlock() != pred.(EnsureNode).getBlock()) and
+          // entering a nested `ensure` block
+          en.getNestLevel() > this.getNestLevel()
+          or
+          not en.isEntryNode() and
+          // staying in the same (possibly nested) `ensure` block as `pred`
+          en.getNestLevel() >= this.getNestLevel()
+          or
+          en.getBlock() = pred.(EnsureNode).getBlock() and
+          // staying in the same (possibly nested) `ensure` block as `pred`
+          en.getNestLevel() >= this.getNestLevel()
         )
     }
   }
