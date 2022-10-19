@@ -92,7 +92,21 @@ private module Propagation {
     or
     isIntExpr(e.(ConstantReadAccess).getValue(), i)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isInt(n, i))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isInt(n, i))
+    isIntExprForexHelper(e, i)
+  }
+
+  private predicate isIntExprForexHelper(Expr e, int i) {
+    isIntExprForexHelper0(e, i, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isIntExprForexHelper0(Expr e, int i, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isInt(n, i)) and
+    (
+      r = 0
+      or
+      r > 0 and isIntExprForexHelper0(e, i, r - 1)
+    )
   }
 
   predicate isFloat(ExprCfgNode e, float f) {
@@ -150,7 +164,21 @@ private module Propagation {
     or
     isFloatExpr(e.(ConstantReadAccess).getValue(), f)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isFloat(n, f))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isFloat(n, f))
+    isFloatExprForexHelper(e, f)
+  }
+
+  private predicate isFloatExprForexHelper(Expr e, float f) {
+    isFloatExprForexHelper0(e, f, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isFloatExprForexHelper0(Expr e, float f, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isFloat(n, f)) and
+    (
+      r = 0
+      or
+      r > 0 and isFloatExprForexHelper0(e, f, r - 1)
+    )
   }
 
   predicate isRational(ExprCfgNode e, int numerator, int denominator) {
@@ -172,7 +200,21 @@ private module Propagation {
     or
     isRationalExpr(e.(ConstantReadAccess).getValue(), numerator, denominator)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isRational(n, numerator, denominator))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isRational(n, numerator, denominator))
+    isRationalExprForexHelper(e, numerator, denominator)
+  }
+
+  private predicate isRationalExprForexHelper(Expr e, int numerator, int denominator) {
+    isRationalExprForexHelper0(e, numerator, denominator, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isRationalExprForexHelper0(Expr e, int numerator, int denominator, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isRational(n, numerator, denominator)) and
+    (
+      r = 0
+      or
+      r > 0 and isRationalExprForexHelper0(e, numerator, denominator, r - 1)
+    )
   }
 
   predicate isComplex(ExprCfgNode e, float real, float imaginary) {
@@ -194,7 +236,21 @@ private module Propagation {
     or
     isComplexExpr(e.(ConstantReadAccess).getValue(), real, imaginary)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isComplex(n, real, imaginary))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isComplex(n, real, imaginary))
+    isComplexExprForexHelper(e, real, imaginary)
+  }
+
+  private predicate isComplexExprForexHelper(Expr e, float real, float imaginary) {
+    isComplexExprForexHelper0(e, real, imaginary, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isComplexExprForexHelper0(Expr e, float real, float imaginary, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isComplex(n, real, imaginary)) and
+    (
+      r = 0
+      or
+      r > 0 and isComplexExprForexHelper0(e, real, imaginary, r - 1)
+    )
   }
 
   private class StringlikeLiteralWithInterpolationCfgNode extends StringlikeLiteralCfgNode {
@@ -238,14 +294,10 @@ private module Propagation {
     }
 
     pragma[noinline]
-    private predicate getStringValueHelper0() {
-      this.getExpr() instanceof SymbolLiteral
-    }
+    private predicate getStringValueHelper0() { this.getExpr() instanceof SymbolLiteral }
 
     pragma[noinline]
-    private predicate getStringValueHelper1() {
-      this.getExpr() instanceof RegExpLiteral
-    }
+    private predicate getStringValueHelper1() { this.getExpr() instanceof RegExpLiteral }
 
     pragma[nomagic]
     string getRegExpValue(string flags) {
@@ -312,7 +364,36 @@ private module Propagation {
     or
     isStringExpr(e.(ConstantReadAccess).getValue(), s)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isString(n, s))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isString(n, s))
+    isStringExprForexHelper(e, s)
+  }
+
+  private predicate isStringExprForexHelper(Expr e, string s) {
+    isStringExprForexHelper0(e, s, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isStringExprForexHelper0(Expr e, string s, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isString(n, s)) and
+    (
+      r = 0
+      or
+      r > 0 and isStringExprForexHelper0(e, s, r - 1)
+    )
+  }
+
+  private int getRankForExprCfgNode(Expr e, ExprCfgNode n) {
+    e.getAControlFlowNode() = n and
+    (
+      not exists(n.getSplitsString()) and result = 0
+      or
+      exists(n.getSplitsString()) and
+      n =
+        rank[result](ExprCfgNode nn, string splitString |
+          nn = e.getAControlFlowNode() and splitString = nn.getSplitsString()
+        |
+          nn order by splitString
+        )
+    )
   }
 
   predicate isSymbol(ExprCfgNode e, string s) {
@@ -337,7 +418,21 @@ private module Propagation {
     or
     isSymbolExpr(e.(ConstantReadAccess).getValue(), s)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isSymbol(n, s))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isSymbol(n, s))
+    isSymbolExprForexHelper(e, s)
+  }
+
+  private predicate isSymbolExprForexHelper(Expr e, string s) {
+    isSymbolExprForexHelper0(e, s, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isSymbolExprForexHelper0(Expr e, string s, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isSymbol(n, s)) and
+    (
+      r = 0
+      or
+      r > 0 and isSymbolExprForexHelper0(e, s, r - 1)
+    )
   }
 
   predicate isRegExp(ExprCfgNode e, string s, string flags) {
@@ -362,7 +457,21 @@ private module Propagation {
     or
     isRegExpExpr(e.(ConstantReadAccess).getValue(), s, flags)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isRegExp(n, s, flags))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isRegExp(n, s, flags))
+    isRegExpExprForexHelper(e, s, flags)
+  }
+
+  private predicate isRegExpExprForexHelper(Expr e, string s, string flags) {
+    isRegExpExprForexHelper0(e, s, flags, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isRegExpExprForexHelper0(Expr e, string s, string flags, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isRegExp(n, s, flags)) and
+    (
+      r = 0
+      or
+      r > 0 and isRegExpExprForexHelper0(e, s, flags, r - 1)
+    )
   }
 
   predicate isBoolean(ExprCfgNode e, boolean b) {
@@ -384,7 +493,21 @@ private module Propagation {
     or
     isBooleanExpr(e.(ConstantReadAccess).getValue(), b)
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isBoolean(n, b))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isBoolean(n, b))
+    isBooleanExprForexHelper(e, b)
+  }
+
+  private predicate isBooleanExprForexHelper(Expr e, boolean b) {
+    isBooleanExprForexHelper0(e, b, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isBooleanExprForexHelper0(Expr e, boolean b, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isBoolean(n, b)) and
+    (
+      r = 0
+      or
+      r > 0 and isBooleanExprForexHelper0(e, b, r - 1)
+    )
   }
 
   predicate isNil(ExprCfgNode e) {
@@ -406,7 +529,21 @@ private module Propagation {
     or
     isNilExpr(e.(ConstantReadAccess).getValue())
     or
-    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isNil(n))
+    //forex(ExprCfgNode n | n = e.getAControlFlowNode() | isNil(n))
+    isNilExprForexHelper(e)
+  }
+
+  private predicate isNilExprForexHelper(Expr e) {
+    isNilExprForexHelper0(e, max(getRankForExprCfgNode(e, _)))
+  }
+
+  private predicate isNilExprForexHelper0(Expr e, int r) {
+    exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isNil(n)) and
+    (
+      r = 0
+      or
+      r > 0 and isNilExprForexHelper0(e, r - 1)
+    )
   }
 }
 

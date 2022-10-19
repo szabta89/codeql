@@ -230,9 +230,7 @@ abstract private class NonExprChildMapping extends ChildMapping {
   }
 }
 
-private predicate astNodeInBlock(BasicBlock bb, AstNode an) {
-  an = bb.getANode().getNode()
-}
+private predicate astNodeInBlock(BasicBlock bb, AstNode an) { an = bb.getANode().getNode() }
 
 /** Provides classes for control-flow nodes that wrap AST expressions. */
 module ExprNodes {
