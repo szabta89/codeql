@@ -203,7 +203,8 @@ abstract private class ExprChildMapping extends Expr, ChildMapping {
     exists(BasicBlock mid |
       this.reachesBasicBlock(child, cfn, mid) and
       bb = mid.getAPredecessor() and
-      not mid.getANode().getNode() = child
+      // not mid.getANode().getNode() = child
+      not astNodeInBlock(mid, child)
     )
   }
 }
@@ -223,9 +224,14 @@ abstract private class NonExprChildMapping extends ChildMapping {
     exists(BasicBlock mid |
       this.reachesBasicBlock(child, cfn, mid) and
       bb = mid.getASuccessor() and
-      not mid.getANode().getNode() = child
+      // not mid.getANode().getNode() = child
+      not astNodeInBlock(mid, child)
     )
   }
+}
+
+private predicate astNodeInBlock(BasicBlock bb, AstNode an) {
+  an = bb.getANode().getNode()
 }
 
 /** Provides classes for control-flow nodes that wrap AST expressions. */

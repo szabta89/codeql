@@ -519,13 +519,19 @@ module ExposedForTestingOnly {
 private TMethodOrExpr lookupMethodOrConst0(Module m, string name) {
   result = lookupMethodOrConst0(m.getAPrependedModule(), name)
   or
-  not exists(getMethodOrConst(getAncestors(m.getAPrependedModule()), name)) and
+  // not exists(getMethodOrConst(getAncestors(m.getAPrependedModule()), name)) and
+  not lookupMethodOrConst0Helper(m, name) and
   (
     result = getMethodOrConst(m, name)
     or
     not exists(getMethodOrConst(m, name)) and
     result = lookupMethodOrConst0(m.getAnIncludedModule(), name)
   )
+}
+
+pragma[noinline]
+private predicate lookupMethodOrConst0Helper(Module m, string name) {
+  exists(getMethodOrConst(getAncestors(m.getAPrependedModule()), name))
 }
 
 private AstNode getNode(TMethodOrExpr e) { e = TMethod(result) or e = TExpr(result) }
@@ -538,7 +544,13 @@ private TMethodOrExpr lookupMethodOrConst(Module m, string name) {
   // For now, we restrict the scope of top-level declarations to their file.
   // This may remove some plausible targets, but also removes a lot of
   // implausible targets
-  if getNode(result).getEnclosingModule() instanceof Toplevel
+  // if getNode(result).getEnclosingModule() instanceof Toplevel
+  if lookupMethodOrConstHelper(result)
   then getNode(result).getFile() = m.getADeclaration().getFile()
   else any()
+}
+
+pragma[noinline]
+private predicate lookupMethodOrConstHelper(TMethodOrExpr tme) {
+  getNode(tme).getEnclosingModule() instanceof Toplevel
 }

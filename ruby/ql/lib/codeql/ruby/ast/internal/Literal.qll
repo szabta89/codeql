@@ -568,10 +568,23 @@ abstract class StringlikeLiteralImpl extends Expr, TStringlikeLiteral {
 
   // 0 components results in the empty string
   // if all interpolations have a known string value, we will get a result
-  language[monotonicAggregates]
+  // language[monotonicAggregates]
+  // final string getStringValue() {
+  //   result =
+  //     concat(StringComponentImpl c, int i | c = this.getComponentImpl(i) | c.getValue() order by i)
+  // }
   final string getStringValue() {
-    result =
-      concat(StringComponentImpl c, int i | c = this.getComponentImpl(i) | c.getValue() order by i)
+    result = getStringValue(1 + max(int i | exists(this.getComponentImpl(i))))
+    or
+    not exists(this.getComponentImpl(_)) and
+    result = ""
+  }
+
+  private string getStringValue(int i) {
+    i = 0 and result = ""
+    or
+    i > 0 and
+    result = this.getStringValue(i - 1) + this.getComponentImpl(i - 1).getValue()
   }
 }
 

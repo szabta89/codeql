@@ -231,8 +231,20 @@ private module Propagation {
     pragma[nomagic]
     string getStringValue() {
       result = this.getValue() and
-      not this.getExpr() instanceof SymbolLiteral and
-      not this.getExpr() instanceof RegExpLiteral
+      // not this.getExpr() instanceof SymbolLiteral and
+      // not this.getExpr() instanceof RegExpLiteral
+      not getStringValueHelper0() and
+      not getStringValueHelper1()
+    }
+
+    pragma[noinline]
+    private predicate getStringValueHelper0() {
+      this.getExpr() instanceof SymbolLiteral
+    }
+
+    pragma[noinline]
+    private predicate getStringValueHelper1() {
+      this.getExpr() instanceof RegExpLiteral
     }
 
     pragma[nomagic]
