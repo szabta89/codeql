@@ -96,10 +96,12 @@ private module Propagation {
     isIntExprForexHelper(e, i)
   }
 
+  pragma[noinline]
   private predicate isIntExprForexHelper(Expr e, int i) {
     isIntExprForexHelper0(e, i, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isIntExprForexHelper0(Expr e, int i, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isInt(n, i)) and
     (
@@ -168,10 +170,12 @@ private module Propagation {
     isFloatExprForexHelper(e, f)
   }
 
+  pragma[noinline]
   private predicate isFloatExprForexHelper(Expr e, float f) {
     isFloatExprForexHelper0(e, f, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isFloatExprForexHelper0(Expr e, float f, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isFloat(n, f)) and
     (
@@ -204,10 +208,12 @@ private module Propagation {
     isRationalExprForexHelper(e, numerator, denominator)
   }
 
+  pragma[noinline]
   private predicate isRationalExprForexHelper(Expr e, int numerator, int denominator) {
     isRationalExprForexHelper0(e, numerator, denominator, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isRationalExprForexHelper0(Expr e, int numerator, int denominator, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isRational(n, numerator, denominator)) and
     (
@@ -240,10 +246,12 @@ private module Propagation {
     isComplexExprForexHelper(e, real, imaginary)
   }
 
+  pragma[noinline]
   private predicate isComplexExprForexHelper(Expr e, float real, float imaginary) {
     isComplexExprForexHelper0(e, real, imaginary, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isComplexExprForexHelper0(Expr e, float real, float imaginary, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isComplex(n, real, imaginary)) and
     (
@@ -272,10 +280,18 @@ private module Propagation {
         )
     }
 
-    language[monotonicAggregates]
+    //language[monotonicAggregates]
     private string getValue() {
-      result =
-        strictconcat(int i | exists(this.getComponent(i)) | this.getComponentValue(i) order by i)
+      //result =
+      //  strictconcat(int i | exists(this.getComponent(i)) | this.getComponentValue(i) order by i)
+      result = getValueHelper(max(int i | exists(this.getComponent(i)) | i))
+    }
+
+    pragma[noinline]
+    private string getValueHelper(int i) {
+      i = 0 and result = this.getComponentValue(i)
+      or
+      i > 0 and result = getValueHelper(i - 1) + this.getComponentValue(i)
     }
 
     pragma[nomagic]
@@ -368,10 +384,12 @@ private module Propagation {
     isStringExprForexHelper(e, s)
   }
 
+  pragma[noinline]
   private predicate isStringExprForexHelper(Expr e, string s) {
     isStringExprForexHelper0(e, s, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isStringExprForexHelper0(Expr e, string s, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isString(n, s)) and
     (
@@ -422,10 +440,12 @@ private module Propagation {
     isSymbolExprForexHelper(e, s)
   }
 
+  pragma[noinline]
   private predicate isSymbolExprForexHelper(Expr e, string s) {
     isSymbolExprForexHelper0(e, s, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isSymbolExprForexHelper0(Expr e, string s, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isSymbol(n, s)) and
     (
@@ -461,10 +481,12 @@ private module Propagation {
     isRegExpExprForexHelper(e, s, flags)
   }
 
+  pragma[noinline]
   private predicate isRegExpExprForexHelper(Expr e, string s, string flags) {
     isRegExpExprForexHelper0(e, s, flags, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isRegExpExprForexHelper0(Expr e, string s, string flags, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isRegExp(n, s, flags)) and
     (
@@ -497,10 +519,12 @@ private module Propagation {
     isBooleanExprForexHelper(e, b)
   }
 
+  pragma[noinline]
   private predicate isBooleanExprForexHelper(Expr e, boolean b) {
     isBooleanExprForexHelper0(e, b, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isBooleanExprForexHelper0(Expr e, boolean b, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isBoolean(n, b)) and
     (
@@ -533,10 +557,12 @@ private module Propagation {
     isNilExprForexHelper(e)
   }
 
+  pragma[noinline]
   private predicate isNilExprForexHelper(Expr e) {
     isNilExprForexHelper0(e, max(getRankForExprCfgNode(e, _)))
   }
 
+  pragma[noinline]
   private predicate isNilExprForexHelper0(Expr e, int r) {
     exists(ExprCfgNode n | r = getRankForExprCfgNode(e, n) | isNil(n)) and
     (
