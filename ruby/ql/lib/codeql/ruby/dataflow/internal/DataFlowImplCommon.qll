@@ -179,9 +179,15 @@ private module LambdaFlow {
     boolean toJump, DataFlowCallOption lastCall
   ) {
     revLambdaFlow0(lambdaCall, kind, node, t, toReturn, toJump, lastCall) and
-    if castNode(node) or node instanceof ArgNode or node instanceof ReturnNode
+    //if castNode(node) or node instanceof ArgNode or node instanceof ReturnNode
+    if revLambdaFlowHelper(node)
     then compatibleTypes(t, getNodeDataFlowType(node))
     else any()
+  }
+
+  pragma[noinline]
+  private predicate revLambdaFlowHelper(Node node) {
+    castNode(node) or node instanceof ArgNode or node instanceof ReturnNode
   }
 
   pragma[nomagic]

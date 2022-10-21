@@ -192,16 +192,31 @@ private module Cached {
       FlowSummaryImpl::Private::summaryCallbackRange(c, receiver)
     }
 
+  pragma[noinline]
+  private predicate getTargetHelper0(CfgNodes::ExprNodes::CallCfgNode call) {
+    call.getExpr() instanceof Operation
+  }
+
+  pragma[noinline]
+  private predicate getTargetHelper1(CfgScope scope) { scope.(Method).isPrivate() }
+
+  pragma[noinline]
+  private predicate getTargetHelper2(CfgScope scope) {
+    scope.getEnclosingModule() instanceof Toplevel
+  }
+
   cached
   CfgScope getTarget(CfgNodes::ExprNodes::CallCfgNode call) {
     // Temporarily disable operation resolution (due to bad performance)
-    not call.getExpr() instanceof Operation and
+    // not call.getExpr() instanceof Operation and
+    not getTargetHelper0(call) and
     (
       exists(string method |
         exists(Module tp |
           instanceMethodCall(call, tp, method) and
           result = lookupMethod(tp, method) and
-          if result.(Method).isPrivate()
+          //if result.(Method).isPrivate()
+          if getTargetHelper1(result)
           then
             exists(SelfVariableAccess self |
               self = call.getReceiver().getExpr() and
@@ -211,9 +226,8 @@ private module Cached {
             // For now, we restrict the scope of top-level declarations to their file.
             // This may remove some plausible targets, but also removes a lot of
             // implausible targets
-            if result.getEnclosingModule() instanceof Toplevel
-            then result.getFile() = call.getFile()
-            else any()
+            //if result.getEnclosingModule() instanceof Toplevel then result.getFile() = call.getFile() else any()
+            if getTargetHelper2(result) then result.getFile() = call.getFile() else any()
           else any()
         )
         or
