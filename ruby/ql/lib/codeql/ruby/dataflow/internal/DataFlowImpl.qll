@@ -3583,7 +3583,8 @@ private AccessPathApprox getATail(AccessPathApprox apa, Configuration config) {
  * expected to be expensive. Holds with `unfold = true` otherwise.
  */
 private predicate evalUnfold(AccessPathApprox apa, boolean unfold, Configuration config) {
-  if apa.getHead().forceHighPrecision()
+  // if apa.getHead().forceHighPrecision()
+  if evalUnfoldHelper(apa)
   then unfold = true
   else
     exists(int aps, int nodes, int apLimit, int tupleLimit |
@@ -3593,6 +3594,9 @@ private predicate evalUnfold(AccessPathApprox apa, boolean unfold, Configuration
       if apLimit < aps and tupleLimit < (aps - 1) * nodes then unfold = false else unfold = true
     )
 }
+
+pragma[noinline]
+private predicate evalUnfoldHelper(AccessPathApprox apa) { apa.getHead().forceHighPrecision() }
 
 /**
  * Gets the number of `AccessPath`s that correspond to `apa`.

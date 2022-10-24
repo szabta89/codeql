@@ -180,9 +180,7 @@ private module LambdaFlow {
   ) {
     revLambdaFlow0(lambdaCall, kind, node, t, toReturn, toJump, lastCall) and
     //if castNode(node) or node instanceof ArgNode or node instanceof ReturnNode
-    if revLambdaFlowHelper(node)
-    then compatibleTypes(t, getNodeDataFlowType(node))
-    else any()
+    if revLambdaFlowHelper(node) then compatibleTypes(t, getNodeDataFlowType(node)) else any()
   }
 
   pragma[noinline]
@@ -798,8 +796,8 @@ private module Cached {
   predicate storeSet(
     Node node1, ContentSet c, Node node2, DataFlowType contentType, DataFlowType containerType
   ) {
-    storeStep(node1, c, node2) and
-    contentType = getNodeDataFlowType(node1) and
+    //storeStep(node1, c, node2) and contentType = getNodeDataFlowType(node1) and
+    storeSetHelper(node1, c, node2, contentType) and
     containerType = getNodeDataFlowType(node2)
     or
     exists(Node n1, Node n2 |
@@ -808,10 +806,15 @@ private module Cached {
     |
       argumentValueFlowsThrough(n2, TReadStepTypesSome(containerType, c, contentType), n1)
       or
-      readSet(n2, c, n1) and
-      contentType = getNodeDataFlowType(n1) and
+      //readSet(n2, c, n1) and contentType = getNodeDataFlowType(n1) and
+      readStepWithTypesHelper(n2, contentType, c, n1) and
       containerType = getNodeDataFlowType(n2)
     )
+  }
+
+  pragma[noinline]
+  private predicate storeSetHelper(Node node1, ContentSet c, Node node2, DataFlowType contentType) {
+    storeStep(node1, c, node2) and contentType = getNodeDataFlowType(node1)
   }
 
   private predicate store(
@@ -953,9 +956,13 @@ class CastingNode extends Node {
 private predicate readStepWithTypes(
   Node n1, DataFlowType container, ContentSet c, Node n2, DataFlowType content
 ) {
-  readSet(n1, c, n2) and
-  container = getNodeDataFlowType(n1) and
+  //readSet(n1, c, n2) and container = getNodeDataFlowType(n1) and
+  readStepWithTypesHelper(n1, container, c, n2) and
   content = getNodeDataFlowType(n2)
+}
+
+private predicate readStepWithTypesHelper(Node n1, DataFlowType container, ContentSet c, Node n2) {
+  readSet(n1, c, n2) and container = getNodeDataFlowType(n1)
 }
 
 private newtype TReadStepTypesOption =
