@@ -205,6 +205,17 @@ private module Cached {
     scope.getEnclosingModule() instanceof Toplevel
   }
 
+  pragma[noinline]
+  private Module getAncestorModule(Expr e) {
+    result = e.getEnclosingModule().getModule() or 
+    result = getAncestorModule(e).getSuperClass()
+  } 
+
+  pragma[noinline]
+  private predicate isAncestorModule(Module sub, Module sup) {
+    sub = sup or isAncestorModule(sub.getSuperClass(), sup)
+  }
+
   cached
   CfgScope getTarget(CfgNodes::ExprNodes::CallCfgNode call) {
     // Temporarily disable operation resolution (due to bad performance)
@@ -220,8 +231,9 @@ private module Cached {
           then
             exists(SelfVariableAccess self |
               self = call.getReceiver().getExpr() and
-              pragma[only_bind_out](self.getEnclosingModule().getModule().getSuperClass*()) =
-                pragma[only_bind_out](result.getEnclosingModule().getModule())
+              isAncestorModule(self.getEnclosingModule().getModule(), result.getEnclosingModule().getModule())
+              //pragma[only_bind_out](self.getEnclosingModule().getModule().getSuperClass*()) =
+              //  pragma[only_bind_out](result.getEnclosingModule().getModule())
             ) and
             // For now, we restrict the scope of top-level declarations to their file.
             // This may remove some plausible targets, but also removes a lot of
