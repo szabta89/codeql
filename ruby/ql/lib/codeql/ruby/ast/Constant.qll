@@ -13,6 +13,10 @@ class ConstantValue extends TConstantValue {
   /** Gets a string describing the type of this constant value. */
   string getValueType() { this.hasValueWithType(_, result) }
 
+  string tConstantValueExtendedToString() {
+    exists(string value, string type | hasValueWithType(value, type) | result = value + "_" + type)
+  }
+
   private predicate hasValueWithType(string value, string type) {
     value = this.getInt().toString() and type = "int"
     or

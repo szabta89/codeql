@@ -376,6 +376,23 @@ private module Cached {
       )
     }
 
+  cached
+  string tContentExtendedToString(TContent c) {
+    exists(ConstantValue cv | c = TKnownElementContent(cv) |
+      result = "TKnownElementContent(" + cv.tConstantValueExtendedToString() + ")"
+    )
+    or
+    c = TUnknownElementContent() and result = "TUnknownElementContent()"
+    or
+    exists(ConstantValue cv | c = TKnownPairValueContent(cv) |
+      result = "TKnownPairValueContent(" + cv.tConstantValueExtendedToString() + ")"
+    )
+    or
+    c = TUnknownPairValueContent() and result = "TUnknownPairValueContent()"
+    or
+    exists(string name | c = TFieldContent(name) | result = "TFieldContent(" + name + ")")
+  }
+
   /**
    * Holds if `e` is an `ExprNode` that may be returned by a call to `c`.
    */
@@ -1001,6 +1018,12 @@ private newtype TDataFlowType =
 
 class DataFlowType extends TDataFlowType {
   string toString() { result = "" }
+
+  string toExtendedString() {
+    this = TTodoDataFlowType() and result = "TTodoDataFlowType"
+    or
+    this = TTodoDataFlowType2() and result = "TTodoDataFlowType2"
+  }
 }
 
 /** Gets the type of `n` used for type pruning. */

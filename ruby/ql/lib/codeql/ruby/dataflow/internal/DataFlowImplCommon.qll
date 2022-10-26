@@ -1332,6 +1332,8 @@ class TypedContent extends MkTypedContent {
   /** Gets a textual representation of this content. */
   string toString() { result = c.toString() }
 
+  string toExtendedString() { result = tContentExtendedToString(c) + "_" + t.toExtendedString() }
+
   /**
    * Holds if access paths with this `TypedContent` at their head always should
    * be tracked at high precision. This disables adaptive access path precision
@@ -1339,6 +1341,10 @@ class TypedContent extends MkTypedContent {
    */
   predicate forceHighPrecision() { forceHighPrecision(c) }
 }
+
+// private predicate check(TypedContent t1, TypedContent t2, string s) {
+//   t1 != t2 and t1.toExtendedString() = t2.toExtendedString() and s = t1.toExtendedString()
+// }
 
 /**
  * The front of an access path. This is either a head or a nil.

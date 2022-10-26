@@ -2678,7 +2678,7 @@ private newtype TAccessPathApprox =
  * the sequence of dereference operations needed to get from the value in the node
  * to the tracked object. The final type indicates the type of the tracked object.
  */
-abstract private class AccessPathApprox extends TAccessPathApprox {
+abstract class AccessPathApprox extends TAccessPathApprox {
   abstract string toString();
 
   abstract TypedContent getHead();
@@ -3571,11 +3571,21 @@ private predicate expensiveLen1to2unfolding(AccessPathApproxCons1 apa, Configura
   )
 }
 
-private AccessPathApprox getATail(AccessPathApprox apa, Configuration config) {
+AccessPathApprox getATail(AccessPathApprox apa, Configuration config) {
   exists(TypedContent head |
     apa.pop(head) = result and
     Stage4::consCand(head, result, config)
   )
+}
+
+AccessPathApprox getATail(AccessPathApprox apa, Configuration config, int index) {
+  result = getATail(apa, config) and
+  result =
+    rank[index + 1](AccessPathApprox apa2, TypedContent head2 |
+      apa.pop(head2) = apa2
+    |
+      apa2 order by head2.toExtendedString()
+    )
 }
 
 /**
@@ -3590,8 +3600,13 @@ private predicate evalUnfold(AccessPathApprox apa, boolean unfold, Configuration
     exists(int aps, int nodes, int apLimit, int tupleLimit |
       aps = countPotentialAps(apa, config) and
       nodes = countNodesUsingAccessPath(apa, config) and
-      accessPathCostLimits(apLimit, tupleLimit) and
-      if apLimit < aps and tupleLimit < (aps - 1) * nodes then unfold = false else unfold = true
+      accessPathCostLimits(apLimit, tupleLimit)
+    |
+      // if apLimit < aps and tupleLimit < (aps - 1) * nodes then unfold = false else unfold = true
+      apLimit < aps and tupleLimit < (aps - 1) * nodes and unfold = false
+      or
+      (apLimit >= aps or tupleLimit >= (aps - 1) * nodes) and
+      unfold = true
     )
 }
 
@@ -3618,11 +3633,29 @@ private int countAps(AccessPathApprox apa, Configuration config) {
  * Gets the number of `AccessPath`s that would correspond to `apa` assuming
  * that it is expanded to a precise head-tail representation.
  */
-language[monotonicAggregates]
+// language[monotonicAggregates]
+// private int countPotentialAps(AccessPathApprox apa, Configuration config) {
+//   apa instanceof AccessPathApproxNil and result = 1
+//   or
+//   result = strictsum(AccessPathApprox tail | tail = getATail(apa, config) | countAps(tail, config))
+// }
 private int countPotentialAps(AccessPathApprox apa, Configuration config) {
   apa instanceof AccessPathApproxNil and result = 1
   or
-  result = strictsum(AccessPathApprox tail | tail = getATail(apa, config) | countAps(tail, config))
+  result = countPotentialTailAps(apa, config, 0)
+}
+
+private int countPotentialTailAps(AccessPathApprox apa, Configuration config, int index) {
+  exists(int n | n = countAps(getATail(apa, config, index), config) |
+    result = n + countPotentialTailAps(apa, config, index + 1)
+    or
+    result = n and not countPotentialTailApsHelper(apa, config, index)
+  )
+}
+
+pragma[noinline]
+private predicate countPotentialTailApsHelper(AccessPathApprox apa, Configuration config, int index) {
+  exists(getATail(apa, config, index + 1))
 }
 
 private newtype TAccessPath =
