@@ -8,7 +8,6 @@ import codeql.ruby.DataFlow
 import codeql.ruby.dataflow.BarrierGuards
 import codeql.ruby.dataflow.RemoteFlowSources
 import codeql.ruby.TaintTracking
-import DataFlow::PathGraph
 
 class BenchmarkConfiguration extends TaintTracking::Configuration {
   BenchmarkConfiguration() { this = "BenchmarkConfiguration" }
@@ -25,7 +24,6 @@ class BenchmarkConfiguration extends TaintTracking::Configuration {
   }
 }
 
-from BenchmarkConfiguration config, DataFlow::PathNode source, DataFlow::PathNode sink
-where config.hasFlowPath(source, sink)
-select sink.getNode(), source, sink, "This SQL query depends on $@.", source.getNode(),
-  "a user-provided value"
+from BenchmarkConfiguration config, DataFlow::Node source, DataFlow::Node sink
+where config.hasFlow(source, sink)
+select source, sink
