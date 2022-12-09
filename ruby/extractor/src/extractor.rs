@@ -44,15 +44,21 @@ impl TrapWriter {
         label
     }
 
-    fn global_id(&mut self, key: &str) -> (Label, bool) {
+    fn global_id(&mut self, key: &str, use_stable_id_generation: bool) -> (Label, bool) {
         if let Some(label) = self.global_keys.get(key) {
             return (*label, false);
         }
         let label = Label(self.counter);
         self.counter += 1;
         self.global_keys.insert(key.to_owned(), label);
-        self.trap_output
-            .push(TrapEntry::MapLabelToKey(label, key.to_owned()));
+
+        if use_stable_id_generation {
+            self.trap_output
+                .push(TrapEntry::MapLabelToStableKey(label, key.to_owned()));
+        } else {
+            self.trap_output
+                .push(TrapEntry::MapLabelToKey(label, key.to_owned()));
+        }
         (label, true)
     }
 
@@ -65,8 +71,9 @@ impl TrapWriter {
             .push(TrapEntry::GenericTuple(table_name.to_owned(), args))
     }
 
-    fn populate_file(&mut self, absolute_path: &Path) -> Label {
-        let (file_label, fresh) = self.global_id(&full_id_for_file(absolute_path));
+    fn populate_file(&mut self, absolute_path: &Path, use_stable_id_generation: bool) -> Label {
+        let (file_label, fresh) =
+            self.global_id(&full_id_for_file(absolute_path), use_stable_id_generation);
         if fresh {
             self.add_tuple(
                 "files",
@@ -75,13 +82,17 @@ impl TrapWriter {
                     Arg::String(normalize_path(absolute_path)),
                 ],
             );
-            self.populate_parent_folders(file_label, absolute_path.parent());
+            self.populate_parent_folders(
+                file_label,
+                absolute_path.parent(),
+                use_stable_id_generation,
+            );
         }
         file_label
     }
 
-    fn populate_empty_file(&mut self) -> Label {
-        let (file_label, fresh) = self.global_id("empty;sourcefile");
+    fn populate_empty_file(&mut self, use_stable_id_generation: bool) -> Label {
+        let (file_label, fresh) = self.global_id("empty;sourcefile", use_stable_id_generation);
         if fresh {
             self.add_tuple(
                 "files",
@@ -91,19 +102,25 @@ impl TrapWriter {
         file_label
     }
 
-    pub fn populate_empty_location(&mut self) {
-        let file_label = self.populate_empty_file();
-        self.location(file_label, 0, 0, 0, 0);
+    pub fn populate_empty_location(&mut self, use_stable_id_generation: bool) {
+        let file_label = self.populate_empty_file(use_stable_id_generation);
+        self.location(file_label, 0, 0, 0, 0, use_stable_id_generation);
     }
 
-    fn populate_parent_folders(&mut self, child_label: Label, path: Option<&Path>) {
+    fn populate_parent_folders(
+        &mut self,
+        child_label: Label,
+        path: Option<&Path>,
+        use_stable_id_generation: bool,
+    ) {
         let mut path = path;
         let mut child_label = child_label;
         loop {
             match path {
                 None => break,
                 Some(folder) => {
-                    let (folder_label, fresh) = self.global_id(&full_id_for_folder(folder));
+                    let (folder_label, fresh) =
+                        self.global_id(&full_id_for_folder(folder), use_stable_id_generation);
                     self.add_tuple(
                         "containerparent",
                         vec![Arg::Label(folder_label), Arg::Label(child_label)],
@@ -133,11 +150,15 @@ impl TrapWriter {
         start_column: usize,
         end_line: usize,
         end_column: usize,
+        use_stable_id_generation: bool,
     ) -> Label {
-        let (loc_label, fresh) = self.global_id(&format!(
-            "loc,{{{}}},{},{},{},{}",
-            file_label, start_line, start_column, end_line, end_column
-        ));
+        let (loc_label, fresh) = self.global_id(
+            &format!(
+                "loc,{{{}}},{},{},{},{}",
+                file_label, start_line, start_column, end_line, end_column
+            ),
+            use_stable_id_generation,
+        );
         if fresh {
             self.add_tuple(
                 "locations_default",
@@ -177,6 +198,7 @@ pub fn extract(
     source: &[u8],
     ranges: &[Range],
     diff_descriptor: &Option<JsonValue>,
+    use_stable_id_generation: bool,
 ) -> std::io::Result<()> {
     let span = span!(
         Level::TRACE,
@@ -196,7 +218,7 @@ pub fn extract(
         "Auto-generated TRAP file for {}",
         full_path.display()
     ));
-    let file_label = &trap_writer.populate_file(full_path);
+    let file_label = &trap_writer.populate_file(full_path, use_stable_id_generation);
     let mut visitor = Visitor {
         source,
         trap_writer,
@@ -208,7 +230,12 @@ pub fn extract(
         language_prefix,
         schema,
     };
-    traverse(&tree, &mut visitor, diff_descriptor);
+    traverse(
+        &tree,
+        &mut visitor,
+        diff_descriptor,
+        use_stable_id_generation,
+    );
 
     parser.reset();
     Ok(())
@@ -346,6 +373,7 @@ impl Visitor<'_> {
         error_message: String,
         full_error_message: String,
         node: Node,
+        use_stable_id_generation : bool
     ) {
         let (start_line, start_column, end_line, end_column) = location_for(self.source, node);
         let loc = self.trap_writer.location(
@@ -354,11 +382,18 @@ impl Visitor<'_> {
             start_column,
             end_line,
             end_column,
+            use_stable_id_generation
         );
         self.record_parse_error(error_message, full_error_message, loc);
     }
 
-    fn enter_node(&mut self, node: Node) -> bool {
+    fn enter_node(
+        &mut self,
+        node: Node,
+        file_path: String,
+        node_path: String,
+        use_stable_id_generation: bool,
+    ) -> bool {
         if node.is_error() || node.is_missing() {
             let error_message = if node.is_missing() {
                 format!("parse error: expecting '{}'", node.kind())
@@ -371,14 +406,25 @@ impl Visitor<'_> {
                 node.start_position().row + 1,
                 error_message
             );
-            self.record_parse_error_for_node(error_message, full_error_message, node);
+            self.record_parse_error_for_node(error_message, full_error_message, node, use_stable_id_generation);
             return false;
         }
 
-        let id = self.trap_writer.fresh_id();
-
-        self.stack.push((id, 0, Vec::new()));
-        true
+        if use_stable_id_generation {
+            let id = self
+                .trap_writer
+                .global_id(
+                    &format!("{}_{}", file_path, node_path).to_string(),
+                    use_stable_id_generation,
+                )
+                .0;
+            self.stack.push((id, 0, Vec::new()));
+            true
+        } else {
+            let id = self.trap_writer.fresh_id();
+            self.stack.push((id, 0, Vec::new()));
+            true
+        }
     }
 
     fn leave_node(
@@ -387,6 +433,7 @@ impl Visitor<'_> {
         node: Node,
         node_path: String,
         diff_descriptor: &Option<JsonValue>,
+        use_stable_id_generation : bool
     ) {
         if node.is_error() || node.is_missing() {
             return;
@@ -399,6 +446,7 @@ impl Visitor<'_> {
             start_column,
             end_line,
             end_column,
+            use_stable_id_generation
         );
         let table = self
             .schema
@@ -442,7 +490,7 @@ impl Visitor<'_> {
                 fields,
                 name: table_name,
             } => {
-                if let Some(args) = self.complex_node(&node, fields, &child_nodes, id) {
+                if let Some(args) = self.complex_node(&node, fields, &child_nodes, id, use_stable_id_generation) {
                     self.trap_writer.add_tuple(
                         &format!("{}_ast_node_info", self.language_prefix),
                         vec![
@@ -515,6 +563,7 @@ impl Visitor<'_> {
         fields: &[Field],
         child_nodes: &[ChildNode],
         parent_id: Label,
+        use_stable_id_generation : bool
     ) -> Option<Vec<Arg>> {
         let mut map: Map<&Option<String>, (&Field, Vec<Arg>)> = Map::new();
         for field in fields {
@@ -548,7 +597,7 @@ impl Visitor<'_> {
                         node.start_position().row + 1,
                         error_message
                     );
-                    self.record_parse_error_for_node(error_message, full_error_message, *node);
+                    self.record_parse_error_for_node(error_message, full_error_message, *node, use_stable_id_generation);
                 }
             } else if child_node.field_name.is_some() || child_node.type_name.named {
                 let error_message = format!(
@@ -563,7 +612,7 @@ impl Visitor<'_> {
                     node.start_position().row + 1,
                     error_message
                 );
-                self.record_parse_error_for_node(error_message, full_error_message, *node);
+                self.record_parse_error_for_node(error_message, full_error_message, *node, use_stable_id_generation);
             }
         }
         let mut args = Vec::new();
@@ -592,7 +641,7 @@ impl Visitor<'_> {
                             node.start_position().row + 1,
                             error_message
                         );
-                        self.record_parse_error_for_node(error_message, full_error_message, *node);
+                        self.record_parse_error_for_node(error_message, full_error_message, *node, use_stable_id_generation);
                     }
                 }
                 Storage::Table {
@@ -724,52 +773,67 @@ fn traverse(
     tree: &Tree,
     visitor: &mut Visitor,
     diff_descriptor: &Option<JsonValue>,
+    use_stable_id_generation: bool,
 ) {
-    let mut paths: HashMap<usize, String> = HashMap::new();
-    let mut child_indices: HashMap<usize, u64> = HashMap::new();
-
+    let mut node_id_to_path: HashMap<usize, String> = HashMap::new();
+    let mut node_id_to_children_count: HashMap<usize, u64> = HashMap::new();
     let cursor = &mut tree.walk();
-    paths.insert(cursor.node().id(), "0".to_string());
-    child_indices.insert(cursor.node().id(), 0);
-    visitor.enter_node(cursor.node());
+
+    node_id_to_path.insert(cursor.node().id(), "0".to_string());
+    node_id_to_children_count.insert(cursor.node().id(), 0);
+    visitor.enter_node(
+        cursor.node(),
+        visitor.path.clone(),
+        "0".to_string(),
+        use_stable_id_generation,
+    );
 
     let mut recurse = true;
     loop {
         if recurse && cursor.goto_first_child() {
             let parent_id = cursor.node().parent().unwrap().id();
-            let parent_path = paths.get(&parent_id).unwrap();
+            let parent_path = node_id_to_path.get(&parent_id).unwrap();
 
             let current_id = cursor.node().id();
-            let current_child_index = child_indices.get(&parent_id).unwrap().clone();
+            let current_child_index = node_id_to_children_count.get(&parent_id).unwrap().clone();
             let current_path = format!("{}_{}", parent_path, current_child_index);
 
-            child_indices.insert(parent_id, current_child_index + 1);
-            child_indices.insert(current_id, 0);
-            paths.insert(current_id, current_path.clone());
+            node_id_to_children_count.insert(parent_id, current_child_index + 1);
+            node_id_to_children_count.insert(current_id, 0);
+            node_id_to_path.insert(current_id, current_path.clone());
 
-            recurse = visitor.enter_node(cursor.node());
-        } else {
-            let path = paths.get(&cursor.node().id()).unwrap().to_string();
-            visitor.leave_node(
-                cursor.field_name(),
+            recurse = visitor.enter_node(
                 cursor.node(),
-                path,
-                diff_descriptor,
+                visitor.path.clone(),
+                current_path.clone(),
+                use_stable_id_generation,
             );
+        } else {
+            let path = node_id_to_path
+                .get(&cursor.node().id())
+                .unwrap()
+                .to_string();
+            visitor.leave_node(cursor.field_name(), cursor.node(), path, diff_descriptor, use_stable_id_generation);
 
             if cursor.goto_next_sibling() {
                 let parent_id = cursor.node().parent().unwrap().id();
-                let parent_path = paths.get(&parent_id).unwrap();
+                let parent_path = node_id_to_path.get(&parent_id).unwrap();
 
                 let current_id = cursor.node().id();
-                let current_child_index = child_indices.get(&parent_id).unwrap().clone();
+                let current_child_index =
+                    node_id_to_children_count.get(&parent_id).unwrap().clone();
                 let current_path = format!("{}_{}", parent_path, current_child_index);
 
-                child_indices.insert(parent_id, current_child_index + 1);
-                child_indices.insert(current_id, 0);
-                paths.insert(current_id, current_path.clone());
+                node_id_to_children_count.insert(parent_id, current_child_index + 1);
+                node_id_to_children_count.insert(current_id, 0);
+                node_id_to_path.insert(current_id, current_path.clone());
 
-                recurse = visitor.enter_node(cursor.node());
+                recurse = visitor.enter_node(
+                    cursor.node(),
+                    visitor.path.clone(),
+                    current_path.clone(),
+                    use_stable_id_generation,
+                );
             } else if cursor.goto_parent() {
                 recurse = false;
             } else {
@@ -796,6 +860,8 @@ enum TrapEntry {
     FreshId(Label),
     /// Maps the label to a key, e.g. `#7=@"foo"`.
     MapLabelToKey(Label, String),
+    /// Maps the label to a key, e.g. `#7=$"foo"`. This will have special handling in the trap importer
+    MapLabelToStableKey(Label, String),
     /// foo_bar(arg*)
     GenericTuple(String, Vec<Arg>),
     BumpId(),
@@ -807,6 +873,9 @@ impl fmt::Display for TrapEntry {
             TrapEntry::FreshId(label) => write!(f, "{}=*", label),
             TrapEntry::MapLabelToKey(label, key) => {
                 write!(f, "{}=@\"{}\"", label, key.replace("\"", "\"\""))
+            }
+            TrapEntry::MapLabelToStableKey(label, key) => {
+                write!(f, "{}=$\"{}\"", label, key.replace("\"", "\"\""))
             }
             TrapEntry::GenericTuple(name, args) => {
                 write!(f, "{}(", name)?;

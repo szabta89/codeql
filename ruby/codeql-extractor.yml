@@ -16,3 +16,6 @@ options:
   diff_descriptor:
     title: The path to the diff descriptor file.
     type: string
+  use_stable_id_generation:
+    title: Boolean flag controlling whether stable ids should be used.
+    type: string

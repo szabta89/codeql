@@ -49,35 +49,6 @@ impl TrapCompression {
     }
 }
 
-/**
- * Gets the number of threads the extractor should use, by reading the
- * CODEQL_THREADS environment variable and using it as described in the
- * extractor spec:
- *
- * "If the number is positive, it indicates the number of threads that should
- * be used. If the number is negative or zero, it should be added to the number
- * of cores available on the machine to determine how many threads to use
- * (minimum of 1). If unspecified, should be considered as set to -1."
- */
-fn num_codeql_threads() -> usize {
-    let threads_str = std::env::var("CODEQL_THREADS").unwrap_or_else(|_| "-1".to_owned());
-    match threads_str.parse::<i32>() {
-        Ok(num) if num <= 0 => {
-            let reduction = -num as usize;
-            std::cmp::max(1, num_cpus::get() - reduction)
-        }
-        Ok(num) => num as usize,
-
-        Err(_) => {
-            tracing::error!(
-                "Unable to parse CODEQL_THREADS value '{}'; defaulting to 1 thread.",
-                &threads_str
-            );
-            1
-        }
-    }
-}
-
 fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
         .with_target(false)
@@ -134,7 +105,7 @@ fn main() -> std::io::Result<()> {
         match std::env::var("CODEQL_EXTRACTOR_RUBY_OPTION_DIFF_DESCRIPTOR") {
             Ok(v) => {
                 if Path::new(&v).exists() {
-                    println!("Using diff descriptor {}", &v);
+                    println!("diff descriptor: {}", &v);
                     let diff_descriptor_content = fs::read_to_string(&v)?;
                     serde_json::from_str(&diff_descriptor_content)
                         .expect("JSON was not well-formatted")
@@ -143,6 +114,24 @@ fn main() -> std::io::Result<()> {
                 }
             }
             _ => None,
+        };
+
+    let use_stable_id_generation: bool =
+        match std::env::var("CODEQL_EXTRACTOR_RUBY_OPTION_USE_STABLE_ID_GENERATION") {
+            Ok(v) => {
+                println!(
+                    "stable id generation: {}",
+                    v
+                );
+                match v.as_str() {
+                    "true" => true,
+                    "t" => true,
+                    "false" => false,
+                    "f" => false,
+                    _ => false,
+                }
+            }
+            _ => false,
         };
 
     let language = tree_sitter_ruby::language();
@@ -183,6 +172,7 @@ fn main() -> std::io::Result<()> {
                         &source,
                         &[],
                         &diff_descriptor,
+                        use_stable_id_generation,
                     )?;
 
                     let (ranges, line_breaks) = scan_erb(
@@ -210,6 +200,7 @@ fn main() -> std::io::Result<()> {
                     &source,
                     &code_ranges,
                     &diff_descriptor,
+                    use_stable_id_generation,
                 )?;
 
                 std::fs::create_dir_all(&src_archive_file.parent().unwrap())?;
@@ -223,7 +214,7 @@ fn main() -> std::io::Result<()> {
         .expect("failed to extract files");
 
     let mut trap_writer = extractor::new_trap_writer();
-    trap_writer.populate_empty_location();
+    trap_writer.populate_empty_location(use_stable_id_generation);
     write_trap(
         &trap_dir,
         "extras".to_string(),
